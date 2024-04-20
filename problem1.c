@@ -222,31 +222,34 @@ void *the_thread(void *args)
 	struct t_args *pt = (struct t_args *)args;
 	int count = pt->loop_count;
 
-    int first_lock = -1;
-    int second_lock = -1;
-    int target_first_digit = (pt->digit_posi) % THREAD_COUNT;
-    int target_second_digit = (pt->digit_posi + 1) % THREAD_COUNT;
-    do {
-        sem_wait(global_mutex_lock);
-        first_lock = sem_trywait(digit_access_semaphore[target_first_digit]);
-        if (first_lock != -1) {
-            second_lock = sem_trywait(digit_access_semaphore[target_second_digit]);
-        } else {
-            sem_post(digit_access_semaphore[target_first_digit]);
-        }
-        sem_post(global_mutex_lock);
-    } while (first_lock == -1 || second_lock == -1);
-
-    // now all locks have been obtained
 	int loop = pt->loop_count;
 	for (int i=0; i<loop; i++) {
-        digit_in_char[target_first_digit] = '0' + ((digit_in_char[target_first_digit] - '0' + 1) % 10);
-        digit_in_char[target_second_digit] = '0' + ((digit_in_char[target_second_digit] - '0' + 1) % 10);
-		printf("%dth digit: %c, %dth digit: %c\n",target_first_digit, digit_in_char[target_first_digit], target_second_digit, digit_in_char[target_second_digit]);
-	}
+        // assume semaphores are no yet locked
+        int first_lock = -1;
+        int second_lock = -1;
+        int target_first_digit = (pt->digit_posi) % THREAD_COUNT;
+        int target_second_digit = (pt->digit_posi + 1) % THREAD_COUNT;
+        do {
+            sem_wait(global_mutex_lock);
+            first_lock = sem_trywait(digit_access_semaphore[target_first_digit]);
+            if (first_lock != -1) {
+                second_lock = sem_trywait(digit_access_semaphore[target_second_digit]);
+                // if second digit is not available, give up the first one
+                if (second_lock == -1) {
+                    sem_post(digit_access_semaphore[target_first_digit]);
+                }
+            }
+            sem_post(global_mutex_lock);
+        } while (first_lock == -1 || second_lock == -1);
 
-	sem_post(digit_access_semaphore[target_second_digit]);
-	sem_post(digit_access_semaphore[target_first_digit]);
+        // now all locks have been obtained
+            digit_in_char[target_first_digit] = '0' + ((digit_in_char[target_first_digit] - '0' + 1) % 10);
+            digit_in_char[target_second_digit] = '0' + ((digit_in_char[target_second_digit] - '0' + 1) % 10);
+            printf("%dth digit: %c, %dth digit: %c\n",target_first_digit, digit_in_char[target_first_digit], target_second_digit, digit_in_char[target_second_digit]);
+
+        sem_post(digit_access_semaphore[target_second_digit]);
+        sem_post(digit_access_semaphore[target_first_digit]);
+	}
 
 	pthread_exit(NULL);
 }

@@ -12,6 +12,8 @@
 #include <pthread.h>   // This is necessary for Pthread
 #include <string.h>
 
+#include "helpers.h"
+
 // To prevent multiple students to define semaphore with the same name,
 // please always define the name of a semaphore ending with "_GROUP_NAME"
 // where GROUP is your group number and NAME is your full name.
@@ -20,19 +22,24 @@
 #define PARAM_ACCESS_SEMAPHORE "/param_access_semaphore_GROUP_NAME"
 
 #define THREAD_COUNT 9
-#define digit_0_25_Tsoi_Yiu_Chik "/digit_0_access_semaphore_25_Tsoi_Yiu_Chik"
-#define digit_1_25_Tsoi_Yiu_Chik "/digit_1_access_semaphore_25_Tsoi_Yiu_Chik"
-#define digit_2_25_Tsoi_Yiu_Chik "/digit_2_access_semaphore_25_Tsoi_Yiu_Chik"
-#define digit_3_25_Tsoi_Yiu_Chik "/digit_3_access_semaphore_25_Tsoi_Yiu_Chik"
-#define digit_4_25_Tsoi_Yiu_Chik "/digit_4_access_semaphore_25_Tsoi_Yiu_Chik"
-#define digit_5_25_Tsoi_Yiu_Chik "/digit_5_access_semaphore_25_Tsoi_Yiu_Chik"
-#define digit_6_25_Tsoi_Yiu_Chik "/digit_6_access_semaphore_25_Tsoi_Yiu_Chik"
-#define digit_7_25_Tsoi_Yiu_Chik "/digit_7_access_semaphore_25_Tsoi_Yiu_Chik"
-#define digit_8_25_Tsoi_Yiu_Chik "/digit_8_access_semaphore_25_Tsoi_Yiu_Chik"
+#define digit_0_21_Tsoi_Yiu_Chik "/digit_0_access_semaphore_21_Tsoi_Yiu_Chik"
+#define digit_1_21_Tsoi_Yiu_Chik "/digit_1_access_semaphore_21_Tsoi_Yiu_Chik"
+#define digit_2_21_Tsoi_Yiu_Chik "/digit_2_access_semaphore_21_Tsoi_Yiu_Chik"
+#define digit_3_21_Tsoi_Yiu_Chik "/digit_3_access_semaphore_21_Tsoi_Yiu_Chik"
+#define digit_4_21_Tsoi_Yiu_Chik "/digit_4_access_semaphore_21_Tsoi_Yiu_Chik"
+#define digit_5_21_Tsoi_Yiu_Chik "/digit_5_access_semaphore_21_Tsoi_Yiu_Chik"
+#define digit_6_21_Tsoi_Yiu_Chik "/digit_6_access_semaphore_21_Tsoi_Yiu_Chik"
+#define digit_7_21_Tsoi_Yiu_Chik "/digit_7_access_semaphore_21_Tsoi_Yiu_Chik"
+#define digit_8_21_Tsoi_Yiu_Chik "/digit_8_access_semaphore_21_Tsoi_Yiu_Chik"
+#define global_mutex_21_Tsoi_Yiu_Chik "/global_mutex_21_Tsoi_Yiu_Chik"
 
 sem_t *digit_access_semaphore[THREAD_COUNT];
+sem_t *global_mutex_lock;
+
 
 long int global_param = 0;
+
+char digit_in_char[THREAD_COUNT];
 
 struct t_args
 {
@@ -215,27 +222,31 @@ void *the_thread(void *args)
 	struct t_args *pt = (struct t_args *)args;
 	int count = pt->loop_count;
 
-	// for (int i = 0; i < count; i++)
-	// {
-	// 	sem_wait(digit_access_semaphore[pt->digit_posi]);
-	// 	sem_wait(digit_access_semaphore[pt->digit_posi + 1]);
+    int first_lock = -1;
+    int second_lock = -1;
+    int target_first_digit = (pt->digit_posi) % THREAD_COUNT;
+    int target_second_digit = (pt->digit_posi + 1) % THREAD_COUNT;
+    do {
+        sem_wait(global_mutex_lock);
+        first_lock = sem_trywait(digit_access_semaphore[target_first_digit]);
+        if (first_lock != -1) {
+            second_lock = sem_trywait(digit_access_semaphore[target_second_digit]);
+        } else {
+            sem_post(digit_access_semaphore[target_first_digit]);
+        }
+        sem_post(global_mutex_lock);
+    } while (first_lock == -1 || second_lock == -1);
 
-	// 	printf("%d %d\n", pt->digit_posi, pt->loop_count);
-
-	// 	sem_post(digit_access_semaphore[pt->digit_posi + 1]);
-	// 	sem_post(digit_access_semaphore[pt->digit_posi]);
-	// }
-
-	sem_wait(digit_access_semaphore[pt->digit_posi]);
-	sem_wait(digit_access_semaphore[pt->digit_posi + 1]);
-
+    // now all locks have been obtained
 	int loop = pt->loop_count;
 	for (int i=0; i<loop; i++) {
-		printf("%d %d\n", pt->digit_posi, pt->loop_count);
+        digit_in_char[target_first_digit] = '0' + ((digit_in_char[target_first_digit] - '0' + 1) % 10);
+        digit_in_char[target_second_digit] = '0' + ((digit_in_char[target_second_digit] - '0' + 1) % 10);
+		printf("%dth digit: %c, %dth digit: %c\n",target_first_digit, digit_in_char[target_first_digit], target_second_digit, digit_in_char[target_second_digit]);
 	}
 
-	sem_post(digit_access_semaphore[pt->digit_posi + 1]);
-	sem_post(digit_access_semaphore[pt->digit_posi]);
+	sem_post(digit_access_semaphore[target_second_digit]);
+	sem_post(digit_access_semaphore[target_first_digit]);
 
 	pthread_exit(NULL);
 }
@@ -250,59 +261,80 @@ void multi_threads_run(long int input_param, long op_round)
 	// Add your code here
 
 	// unlink semaphore
-	sem_unlink(digit_0_25_Tsoi_Yiu_Chik);
-	sem_unlink(digit_1_25_Tsoi_Yiu_Chik);
-	sem_unlink(digit_2_25_Tsoi_Yiu_Chik);
-	sem_unlink(digit_3_25_Tsoi_Yiu_Chik);
-	sem_unlink(digit_4_25_Tsoi_Yiu_Chik);
-	sem_unlink(digit_5_25_Tsoi_Yiu_Chik);
-	sem_unlink(digit_6_25_Tsoi_Yiu_Chik);
-	sem_unlink(digit_7_25_Tsoi_Yiu_Chik);
-	sem_unlink(digit_8_25_Tsoi_Yiu_Chik);
+	sem_unlink(global_mutex_21_Tsoi_Yiu_Chik);
+	sem_unlink(digit_0_21_Tsoi_Yiu_Chik);
+	sem_unlink(digit_1_21_Tsoi_Yiu_Chik);
+	sem_unlink(digit_2_21_Tsoi_Yiu_Chik);
+	sem_unlink(digit_3_21_Tsoi_Yiu_Chik);
+	sem_unlink(digit_4_21_Tsoi_Yiu_Chik);
+	sem_unlink(digit_5_21_Tsoi_Yiu_Chik);
+	sem_unlink(digit_6_21_Tsoi_Yiu_Chik);
+	sem_unlink(digit_7_21_Tsoi_Yiu_Chik);
+	sem_unlink(digit_8_21_Tsoi_Yiu_Chik);
 
 
 	// open semaphore
-	digit_access_semaphore[0] = sem_open(digit_0_25_Tsoi_Yiu_Chik, O_CREAT | O_EXCL, S_IRUSR | S_IWUSR, 1);
-	digit_access_semaphore[1] = sem_open(digit_1_25_Tsoi_Yiu_Chik, O_CREAT | O_EXCL, S_IRUSR | S_IWUSR, 1);
-	digit_access_semaphore[2] = sem_open(digit_2_25_Tsoi_Yiu_Chik, O_CREAT | O_EXCL, S_IRUSR | S_IWUSR, 1);
-	digit_access_semaphore[3] = sem_open(digit_3_25_Tsoi_Yiu_Chik, O_CREAT | O_EXCL, S_IRUSR | S_IWUSR, 1);
-	digit_access_semaphore[4] = sem_open(digit_4_25_Tsoi_Yiu_Chik, O_CREAT | O_EXCL, S_IRUSR | S_IWUSR, 1);
-	digit_access_semaphore[5] = sem_open(digit_5_25_Tsoi_Yiu_Chik, O_CREAT | O_EXCL, S_IRUSR | S_IWUSR, 1);
-	digit_access_semaphore[6] = sem_open(digit_6_25_Tsoi_Yiu_Chik, O_CREAT | O_EXCL, S_IRUSR | S_IWUSR, 1);
-	digit_access_semaphore[7] = sem_open(digit_7_25_Tsoi_Yiu_Chik, O_CREAT | O_EXCL, S_IRUSR | S_IWUSR, 1);
-	digit_access_semaphore[8] = sem_open(digit_8_25_Tsoi_Yiu_Chik, O_CREAT | O_EXCL, S_IRUSR | S_IWUSR, 1);
+    global_mutex_lock = sem_open(global_mutex_21_Tsoi_Yiu_Chik, O_CREAT | O_EXCL, S_IRUSR | S_IWUSR, 1);
+	digit_access_semaphore[0] = sem_open(digit_0_21_Tsoi_Yiu_Chik, O_CREAT | O_EXCL, S_IRUSR | S_IWUSR, 1);
+	digit_access_semaphore[1] = sem_open(digit_1_21_Tsoi_Yiu_Chik, O_CREAT | O_EXCL, S_IRUSR | S_IWUSR, 1);
+	digit_access_semaphore[2] = sem_open(digit_2_21_Tsoi_Yiu_Chik, O_CREAT | O_EXCL, S_IRUSR | S_IWUSR, 1);
+	digit_access_semaphore[3] = sem_open(digit_3_21_Tsoi_Yiu_Chik, O_CREAT | O_EXCL, S_IRUSR | S_IWUSR, 1);
+	digit_access_semaphore[4] = sem_open(digit_4_21_Tsoi_Yiu_Chik, O_CREAT | O_EXCL, S_IRUSR | S_IWUSR, 1);
+	digit_access_semaphore[5] = sem_open(digit_5_21_Tsoi_Yiu_Chik, O_CREAT | O_EXCL, S_IRUSR | S_IWUSR, 1);
+	digit_access_semaphore[6] = sem_open(digit_6_21_Tsoi_Yiu_Chik, O_CREAT | O_EXCL, S_IRUSR | S_IWUSR, 1);
+	digit_access_semaphore[7] = sem_open(digit_7_21_Tsoi_Yiu_Chik, O_CREAT | O_EXCL, S_IRUSR | S_IWUSR, 1);
+	digit_access_semaphore[8] = sem_open(digit_8_21_Tsoi_Yiu_Chik, O_CREAT | O_EXCL, S_IRUSR | S_IWUSR, 1);
 
 	pthread_t threads[THREAD_COUNT];
 	struct t_args thread_args[THREAD_COUNT];
-
-	// create thread
+    // create thread arguments
 	for (int i = 0; i < THREAD_COUNT; i++)
 	{
 		thread_args[i].digit_posi = i;
 		thread_args[i].loop_count = op_round;
+	}
+
+    // convert input parameter to chars
+    long int var = input_param;
+    for (int i = THREAD_COUNT-1; i>=0; i--) {
+        digit_in_char[i] = '0' + input_param % 10;
+        input_param /= 10;
+    }
+
+	// create thread
+	for (int i = 0; i < THREAD_COUNT; i++)
+	{
 		pthread_create(&threads[i], NULL, &the_thread, (void *)&thread_args[i]);
 	}
 
-	// create thread
+	// join thread
 	for (int i = 0; i < THREAD_COUNT; i++)
 	{
 		pthread_join(threads[i], NULL);
 	}
 
 	// close semaphore
+    sem_close(global_mutex_lock);
 	for (int i = 0; i < THREAD_COUNT; i++)
 	{
 		sem_close(digit_access_semaphore[i]);
 	}
 
 	// unline semaphore
-	sem_unlink(digit_0_25_Tsoi_Yiu_Chik);
-	sem_unlink(digit_1_25_Tsoi_Yiu_Chik);
-	sem_unlink(digit_2_25_Tsoi_Yiu_Chik);
-	sem_unlink(digit_3_25_Tsoi_Yiu_Chik);
-	sem_unlink(digit_4_25_Tsoi_Yiu_Chik);
-	sem_unlink(digit_5_25_Tsoi_Yiu_Chik);
-	sem_unlink(digit_6_25_Tsoi_Yiu_Chik);
-	sem_unlink(digit_7_25_Tsoi_Yiu_Chik);
-	sem_unlink(digit_8_25_Tsoi_Yiu_Chik);
+    sem_unlink(global_mutex_21_Tsoi_Yiu_Chik);
+	sem_unlink(digit_0_21_Tsoi_Yiu_Chik);
+	sem_unlink(digit_1_21_Tsoi_Yiu_Chik);
+	sem_unlink(digit_2_21_Tsoi_Yiu_Chik);
+	sem_unlink(digit_3_21_Tsoi_Yiu_Chik);
+	sem_unlink(digit_4_21_Tsoi_Yiu_Chik);
+	sem_unlink(digit_5_21_Tsoi_Yiu_Chik);
+	sem_unlink(digit_6_21_Tsoi_Yiu_Chik);
+	sem_unlink(digit_7_21_Tsoi_Yiu_Chik);
+	sem_unlink(digit_8_21_Tsoi_Yiu_Chik);
+
+    // print the string
+    printf("The final decimal number is: %s\n", digit_in_char);
+
+    // Write to file
+    saveResult("p1_result.txt", strtol(digit_in_char, NULL, 10));
 }
